@@ -28,7 +28,7 @@
     if (window.location.hostname == "www.willusher.io") {
         volumeURL = "https://lab.wushernet.com/data/bcmc/" + zfpDataName;
     } else {
-        volumeURL = "/models/" + zfpDataName;
+        volumeURL = "models/" + zfpDataName;
     }
     var compressedData =
         await fetch(volumeURL).then((res) => res.arrayBuffer().then(function(arr) {
@@ -195,6 +195,7 @@
         var uploadArray = new Float32Array(upload.getMappedRange());
         uploadArray.set(projView);
         uploadArray.set(camera.eyePos(), 16);
+        console.log(camera.eyePos(), camera.eyeDir());
         uploadArray.set(camera.eyeDir(), 20);
         uploadArray.set([nearPlane], 24);
         upload.unmap();
@@ -287,6 +288,22 @@
         if (recomputeSurface || !surfaceDone) {
             var perfTracker = {};
             var start = performance.now();
+
+            //constant: ScanBlockSize = 512, maxScanSize= 262144,  
+            //resetBlockActivePipeline (RS), computeInitialRays (RS), macroTraverse (CS), markActiveBlocks(CS), lruCache.update (CS), decompressBlocks,
+            //computeBlockRayOffsets (CS) - NOTATION- all are number of function in order of execution and RS mean render shader and CS mean fragment shader
+            // ----------------------------------------------------------------------------------
+            //computeInitialRays: set ray_info buffer with ray_info.rays[pixel] = { direction, block_id (which is UINT_MAX), t_hit}
+            // macroTraverse: range finding and fill that storage rays buffer with valid data if that is contributing one
+            // markActiveBlocks: mark the block within LOD range that is found by that rays finding iso-value and its positive neighbour active; 
+            // and also calculate the number of ray that are active in that active block; inactive will have zero which is by default
+            //lrucache.update:   
+            // computeBlockRayOffsets : number of rays active - scanBlockRayOffsets.scan-> , 
+            //sortActiveRaysByBlock: number of block active
+            //raytraceVisibleBlocks: update the blockRayOffsetBuffer
+
+            //insetup- scanPipeline.prepareGPUInput(buffer, size).scan(total_block) 
+
             surfaceDone = await volumeRC.renderSurface(
                 currentIsovalue, currentLOD, upload, perfTracker, recomputeSurface);
             var end = performance.now();

@@ -19,6 +19,21 @@ void main(void) {
     chunk[2 * gl_LocalInvocationID.x + 1] = vals[2 * gl_GlobalInvocationID.x + 1];
 
     uint offs = 1;
+
+    // each other thread will add the adjacent block data
+    //for ease of understanding
+    //see https://www.youtube.com/watch?v=bpbit8SPMxU
+    // for(let s = 1; s<BLOCK_SIZE; s*=2){
+    //  only perform computation and overwrite in thread with 2^tree_height and this modulus is to overwrite first element in two adjacent
+    // target index of array
+    //      condition start to satisfying from zero and it is doing a[i] += a[i+1]
+    //     if(threadId.x%(2*s) == 0){
+    //         partial_sum[threadId.x] += partial_sum[threadId.x +s];
+    //     }
+        // __syncthreads()  //remember that all the threads should be synchronized in each iteration step
+        // i.e inside for loop not outside; 
+    // }
+
     // Reduce step up tree
     for (int d = BLOCK_SIZE >> 1; d > 0; d = d >> 1) {
         barrier();

@@ -3,6 +3,7 @@
 [[block]] struct RayInfos {
     rays : array<RayInfo>;
 };
+
 [[block]] struct VolumeParams {
     volume_dims : vec4<u32>;
     padded_dims : vec4<u32>;
