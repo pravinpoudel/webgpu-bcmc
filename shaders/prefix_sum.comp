@@ -22,7 +22,6 @@ void main(void) {
 
     // each other thread will add the adjacent block data
     //for ease of understanding
-    //see https://www.youtube.com/watch?v=bpbit8SPMxU
     // for(let s = 1; s<BLOCK_SIZE; s*=2){
     //  only perform computation and overwrite in thread with 2^tree_height and this modulus is to overwrite first element in two adjacent
     // target index of array
@@ -33,6 +32,15 @@ void main(void) {
         // __syncthreads()  //remember that all the threads should be synchronized in each iteration step
         // i.e inside for loop not outside; 
     // }
+
+    //once we get the partial sum of block-size number of element, it will be total/block-size number of result
+    // which we want to sum again and fot that we need to get all the partial results in one place
+    // things to note here- we are just using thread 0 for writting and the result is indexed to the index of block which is smart; that
+    // way it get to its correct position
+    // if(threadIdx.x == 0){
+    //     result[blockId.x] = partial_sum[0];
+    // }
+    
 
     // Reduce step up tree
     for (int d = BLOCK_SIZE >> 1; d > 0; d = d >> 1) {
