@@ -298,7 +298,7 @@
             // markActiveBlocks: mark the block within LOD range that is found by that rays finding iso-value and its positive neighbour active; 
             // and also calculate the number of ray that are active in that active block; inactive will have zero which is by default
             //lrucache.update:   
-            // computeBlockRayOffsets : number of rays active - scanBlockRayOffsets.scan-> , 
+            //computeBlockRayOffsets : number of rays active - scanBlockRayOffsets.scan return the total number of rays active: numRaysActive, 
             //sortActiveRaysByBlock: number of block active
             //raytraceVisibleBlocks: update the blockRayOffsetBuffer
 
