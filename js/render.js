@@ -294,12 +294,17 @@
             //computeBlockRayOffsets (CS) - NOTATION- all are number of function in order of execution and RS mean render shader and CS mean fragment shader
             // ----------------------------------------------------------------------------------
             //computeInitialRays: set ray_info buffer with ray_info.rays[pixel] = { direction, block_id (which is UINT_MAX), t_hit}
-            // macroTraverse: range finding and fill that storage rays buffer with valid data if that is contributing one
-            // markActiveBlocks: mark the block within LOD range that is found by that rays finding iso-value and its positive neighbour active; 
+            // macroTraverse: rays[ray_index] ={} ->range finding and fill that storage rays buffer with valid data if that is contributing one
+            // markActiveBlocks: block_active[block_id] = 1u for contributing ->  mark the block within LOD range that is found by that rays finding iso-value and its positive neighbour active; 
             // and also calculate the number of ray that are active in that active block; inactive will have zero which is by default
             //lrucache.update:   
             //computeBlockRayOffsets : number of rays active - scanBlockRayOffsets.scan return the total number of rays active: numRaysActive, 
-            //sortActiveRaysByBlock: number of block active
+            //sortActiveRaysByBlock: number of block active; input buffer was number of active ray in each block now it will be sum of block till 
+            //that block i.e prefix sum in buffer this.inpuBuf
+            // total expression of code flow as a generator
+            // new ExclusiveScanPipeline(device).prepareGPUInput(this.blockRayOffsetBuffer, this.scanPipeline.getAlignedSize(this.totalBlocks));   
+            //->  new ExclusiveScanner(this, gpuBuffer, alignedSize).scan()
+
             //raytraceVisibleBlocks: update the blockRayOffsetBuffer
 
             //insetup- scanPipeline.prepareGPUInput(buffer, size).scan(total_block) 

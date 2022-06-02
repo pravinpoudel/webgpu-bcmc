@@ -116,7 +116,7 @@ void main() {
         // Advance in the grid
         if (t_current == t_max.x) {
             cell.x += grid_step.x;
-            t_max.x += t_delta.x;
+            t_max.x += t_delta.x; 
         } else if (t_current == t_max.y) {
             cell.y += grid_step.y;
             t_max.y += t_delta.y;

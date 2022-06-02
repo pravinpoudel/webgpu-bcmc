@@ -201,9 +201,9 @@ ExclusiveScanner.prototype.scan = async function (dataSize) {
   // If the data size we're scanning within the larger input array has changed,
   // we just need to re-record the scan commands
   console.log("input", this.inputBuf);
+  // when called from computeBlockRayOffsets function in volume_raycaster, input is blockNumRaysBuffer
 
   var numChunks = Math.ceil(dataSize / this.scanPipeline.maxScanSize);
-  console.log(scanCheck++, dataSize);
   this.offsets = new Uint32Array(numChunks);
   for (var i = 0; i < numChunks; ++i) {
     this.offsets.set([i * this.scanPipeline.maxScanSize * 4], i);
@@ -223,9 +223,9 @@ ExclusiveScanner.prototype.scan = async function (dataSize) {
   );
 
   //inputsize is padded dim in 3d
-  //   inputSize for 64X64X64 is 262144
-  console.log(this.scanPipeline.maxScanSize);
+  // inputSize for 64X64X64 is 262144
   for (var i = 0; i < numChunks; ++i) {
+    // ScanBlockkSize*nWorkGroups
     var nWorkGroups = Math.min(
       (this.inputSize - i * this.scanPipeline.maxScanSize) / ScanBlockSize,
       ScanBlockSize
@@ -287,10 +287,13 @@ ExclusiveScanner.prototype.scan = async function (dataSize) {
 
     var computePass = commandEncoder.beginComputePass();
 
+    //this is to make a prefix sum of each maxScanSize or datasize or remainder number of block; remember sum in each workgroup only
     computePass.setPipeline(this.scanPipeline.scanBlocksPipeline);
     computePass.setBindGroup(0, scanBlockBG);
     computePass.dispatch(nWorkGroups, 1, 1);
 
+    // this is to adjoin all the workgroup based chunk relatd to whole data array;
+    //i dont understand why we are traversing the whole array but i got the gyst
     computePass.setPipeline(this.scanPipeline.scanBlockResultsPipeline);
     computePass.setBindGroup(0, this.scanBlockResultsBindGroup);
     computePass.dispatch(1, 1, 1);
@@ -302,13 +305,20 @@ ExclusiveScanner.prototype.scan = async function (dataSize) {
     computePass.end();
 
     // Update the carry in value for the next chunk, copy carry out to carry in
+    //here we are copying carryout into carryin
     commandEncoder.copyBufferToBuffer(
       this.carryBuf,
-      4,
+      4, //sourceoffset; which is carryout
       this.carryIntermediateBuf,
-      0,
+      0, //destinationoffset; which is carryin
       4
     );
+
+    //we just want carryout into carryin becaus that carryout is from previous chunk
+    // and that carryout in previous chunk is carryin for present chunk;
+
+    //we dont need to clear second byte of carrybuf because we are anyway not reading and
+    //only writing
     commandEncoder.copyBufferToBuffer(
       this.carryIntermediateBuf,
       0,
@@ -319,8 +329,13 @@ ExclusiveScanner.prototype.scan = async function (dataSize) {
   }
   var commandBuffer = commandEncoder.finish();
 
+  //and one more thing; we made intermediate buffer because we can't copy from one part of buffer into another
+  
   // We need to clear a different element in the input buf for the last item if the data size
   // shrinks
+
+  //datasize is blocksize which is total block considering all 3 dimensions
+
   if (dataSize < this.inputSize) {
     var commandEncoder = this.scanPipeline.device.createCommandEncoder();
     commandEncoder.copyBufferToBuffer(
@@ -338,6 +353,7 @@ ExclusiveScanner.prototype.scan = async function (dataSize) {
   // Readback the the last element to return the total sum as well
   var commandEncoder = this.scanPipeline.device.createCommandEncoder();
   if (dataSize < this.inputSize) {
+    //mean reading the last value (byte) which is sum of all active rays
     commandEncoder.copyBufferToBuffer(
       this.inputBuf,
       dataSize * 4,
@@ -346,14 +362,15 @@ ExclusiveScanner.prototype.scan = async function (dataSize) {
       4
     );
   } else {
+    //mean reading carryout only
     commandEncoder.copyBufferToBuffer(this.carryBuf, 4, this.readbackBuf, 0, 4);
   }
   this.scanPipeline.device.queue.submit([commandEncoder.finish()]);
 
   await this.readbackBuf.mapAsync(GPUMapMode.READ);
   var mapping = new Uint32Array(this.readbackBuf.getMappedRange());
+  // yeah, its funny because we only one element in this value and we have to give index
   var sum = mapping[0];
   this.readbackBuf.unmap();
-
-  return sum;
+  return sum; // total number of active ray
 };

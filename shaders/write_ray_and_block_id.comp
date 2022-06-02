@@ -2,6 +2,7 @@
 
 #include "util.glsl"
 
+//i dont understand why we need this; i guess it is just re-using the buffer that we had in the gpu itself
 layout(set = 0, binding = 0, std140) uniform VolumeParams
 {
     uvec4 volume_dims;
@@ -17,6 +18,7 @@ layout(set = 0, binding = 1, std430) buffer RayInformation
     RayInfo rays[];
 };
 
+//these two are storage buffer to store the new information generated to sort
 layout(set = 0, binding = 2, std430) buffer RayBlockID
 {
     uint block_id[];
@@ -34,6 +36,8 @@ void main() {
     // we don't have to sort the whole framebuffer each time
     // The ray IDs are built during the stream compact IDs, so we don't need to
     // write them out here
+
+    //workgroup count is width*height so block width is image width
     uint ray_index = gl_GlobalInvocationID.x + gl_GlobalInvocationID.y * image_width;
     block_id[ray_index] = rays[ray_index].block_id;
     ray_active[ray_index] = rays[ray_index].block_id != UINT_MAX ? 1 : 0;

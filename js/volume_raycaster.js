@@ -1142,9 +1142,8 @@ VolumeRaycaster.prototype.renderSurface = async function (
   }
 
   start = performance.now();
-  
+
   var numRaysActive = await this.computeBlockRayOffsets();
-  console.log(this.totalBlocks);
   end = performance.now();
   console.log(`Ray active and offsets: ${end - start}ms`);
   console.log(`numRaysActive = ${numRaysActive}`);

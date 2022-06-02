@@ -53,7 +53,10 @@ void main(void) {
         offs = offs << 1;
     }
 
-    if (gl_LocalInvocationID.x == 0) {
+    // added value is on second element b so result of sum by all thread in a workgroup
+    // is in chunk[BLOCKSIZE-1]; if we had put it in a, it would have been in chunk[0] 
+    if (gl_LocalInvocationID.x == 0) { // because we are using first thread to do this;
+                                       //nothing serious
         block_sums[gl_WorkGroupID.x] = chunk[BLOCK_SIZE - 1];
         chunk[BLOCK_SIZE - 1] = 0;
     }
