@@ -26,6 +26,8 @@ layout(set = 0, binding = 3) buffer Output
 void main(void) {
     // Note: this is just for compacting down id's of "active" elements, so 0's are inherently
     // things we don't want to output.
+
+    
     if (inputs[gl_GlobalInvocationID.x] != 0) {
         outputs[offsets[gl_GlobalInvocationID.x]] = gl_GlobalInvocationID.x + compact_offset;
     }
