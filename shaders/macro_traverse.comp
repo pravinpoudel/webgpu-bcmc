@@ -116,19 +116,19 @@ void main() {
     //while not out of the grid
     while(!outside_grid(cell1, coarsedgrid_dims)){
         const ivec3 coarsedgrid_pos = ivec3(cell1);
-         float t_next1 = min(t_max1.x, min(t_max1.y, t_max1.z));
-        //  if (t_next1 < t_current) {
-        //     break;
-        // }
-            vec2 coarsed_grid_range = findCoarsedRange(coarsedgrid_pos);
+         float t_next = min(t_max1.x, min(t_max1.y, t_max1.z));
+         if (t_next < t_current) {
+            break;
+        }
+        vec2 coarsed_grid_range = findCoarsedRange(coarsedgrid_pos);
         if (isovalue >= coarsed_grid_range.x && isovalue <= coarsed_grid_range.y) {
             ivec3 localBoundary = ivec3(coarsedgrid_pos)*4 + ivec3(4, 4, 4);
             while (!outside_grid(cell, localBoundary)) {
                 const ivec3 block_pos = ivec3(cell);
-                float t_next = min(t_max.x, min(t_max.y, t_max.z));
-                //  if (t_next < t_current) {
-                //     break;
-                // }
+                t_next = min(t_max.x, min(t_max.y, t_max.z));
+                if (t_next < t_current) {
+                    break;
+                }
                 uint block_id = block_pos.x + n_blocks.x * (block_pos.y + n_blocks.y * block_pos.z);
                 vec2 cell_range = block_ranges[block_id].range;
                 for (int k = 0; k < 2; ++k) {
@@ -162,40 +162,34 @@ void main() {
                 cell.x += grid_step.x;
                 cell1.x += 0.25*grid_step.x;
                 t_max.x += t_delta.x;
-                t_max1.x +=  0.25*t_delta.x;
 
             } else if (t_current == t_max.y) {
                 cell.y += grid_step.y;
                 cell1.y += 0.25*grid_step.y;
                 t_max.y += t_delta.y;
-                t_max1.y += 0.25*t_delta.y;
             } else {
                 cell.z += grid_step.z;
-                cell1.z += 0.25*grid_step1.z;
+                cell1.z += 0.25*grid_step.z;
                 t_max.z += t_delta.z;
-                t_max1.z += 0.25*t_delta.z;
             }
         }
     }
     else{
          //2 ray movement one in block and coarsed group
-        t_current = t_next1;
+        t_current = t_next;
         // Advance in the grid
-        if (t_current == 4*t_max1.x) {
+        if (t_current == t_max.x) {
             cell1.x += grid_step1.x;
             cell.x += 4*grid_step1.x;
-            t_max1.x += t_delta1.x;
-            t_max.x += 4*t_delta.x;
-        } else if (t_current == 4*t_max1.y) {
+            t_max.x += t_delta1.x;
+        } else if (t_current == t_max1.y) {
             cell1.y += grid_step1.y;
             cell.y += 4*grid_step1.y;
-            t_max1.y += t_delta1.y;
-            t_max.y += 4*t_delta1.y;
+            t_max.y += t_delta1.y;
         } else {
             cell1.z += grid_step1.z;
             cell.z += 4*grid_step1.z;
-            t_max1.z += t_delta1.z;
-            t_max.z += 4* t_delta1.z;
+            t_max.z += t_delta1.z;
         }
     }
     }
