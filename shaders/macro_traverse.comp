@@ -43,7 +43,7 @@ vec2 findCoarsedRange(const uvec3 pos){
     for(int i =0; i<4; i++){
         for(int j=0; j<4; j++){
             for(int k=0; k<4; k++){
-                uvec3 child_block_pos = pos + uvec3(i, j, k); //check for the boundary condition
+                uvec3 child_block_pos = 4*pos + uvec3(i, j, k); //check for the boundary condition
                 uint child_block_id = child_block_pos.x + n_blocks.x * (child_block_pos.y + n_blocks.y * child_block_pos.z); 
                 coarsed_range.x = min(coarsed_range.x, block_ranges[child_block_id].range.x);
                 coarsed_range.y = max(coarsed_range.y, block_ranges[child_block_id].range.y);
@@ -101,7 +101,8 @@ void main() {
     const ivec3 grid_step = ivec3(sign(grid_ray_dir));
 
     const vec3 t_max_neg1 = (cell1 - vol_eye1) * inv_grid_ray_dir1;
-    const vec3 t_max_pos1 = (cell1+ vec3(1) - vol_eye1) * inv_grid_ray_dir1;
+    //we will again have vec3(1) because we would now consider 16 block as 1 unit
+    const vec3 t_max_pos1 = (cell1+ vec3(1) - vol_eye1) * inv_grid_ray_dir1; 
     is_neg_dir = lessThan(grid_ray_dir1, vec3(0));
     vec3 t_max1 = mix(t_max_pos1, t_max_neg1, is_neg_dir);
     const ivec3 grid_step1 = ivec3(sign(grid_ray_dir1));
@@ -116,18 +117,18 @@ void main() {
     while(!outside_grid(cell1, coarsedgrid_dims)){
         const ivec3 coarsedgrid_pos = ivec3(cell1);
          float t_next1 = min(t_max1.x, min(t_max1.y, t_max1.z));
-         if (t_next1 < t_current) {
-            break;
-        }
-        vec2 coarsed_grid_range = findCoarsedRange(coarsedgrid_pos);
+        //  if (t_next1 < t_current) {
+        //     break;
+        // }
+            vec2 coarsed_grid_range = findCoarsedRange(coarsedgrid_pos);
         if (isovalue >= coarsed_grid_range.x && isovalue <= coarsed_grid_range.y) {
-            ivec3 localBoundary = ivec3(coarsedgrid_pos.xyz*4) + ivec3(4);
+            ivec3 localBoundary = ivec3(coarsedgrid_pos)*4 + ivec3(4, 4, 4);
             while (!outside_grid(cell, localBoundary)) {
                 const ivec3 block_pos = ivec3(cell);
                 float t_next = min(t_max.x, min(t_max.y, t_max.z));
-                 if (t_next < t_current) {
-                    break;
-                }
+                //  if (t_next < t_current) {
+                //     break;
+                // }
                 uint block_id = block_pos.x + n_blocks.x * (block_pos.y + n_blocks.y * block_pos.z);
                 vec2 cell_range = block_ranges[block_id].range;
                 for (int k = 0; k < 2; ++k) {
