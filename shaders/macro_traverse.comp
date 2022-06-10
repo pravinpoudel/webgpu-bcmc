@@ -44,9 +44,11 @@ vec2 findCoarsedRange(const uvec3 pos){
         for(int j=0; j<4; j++){
             for(int k=0; k<4; k++){
                 uvec3 child_block_pos = 4*pos + uvec3(i, j, k); //check for the boundary condition
-                uint child_block_id = child_block_pos.x + n_blocks.x * (child_block_pos.y + n_blocks.y * child_block_pos.z); 
-                coarsed_range.x = min(coarsed_range.x, block_ranges[child_block_id].range.x);
-                coarsed_range.y = max(coarsed_range.y, block_ranges[child_block_id].range.y);
+                if(!any(greaterThanEqual(child_block_pos, n_blocks))){
+                    uint child_block_id = child_block_pos.x + n_blocks.x * (child_block_pos.y + n_blocks.y * child_block_pos.z); 
+                    coarsed_range.x = min(coarsed_range.x, block_ranges[child_block_id].range.x);
+                    coarsed_range.y = max(coarsed_range.y, block_ranges[child_block_id].range.y);
+                }
             }
         }
     }
@@ -80,9 +82,7 @@ void main() {
     float t_current = rays[ray_index].t;
 	vec3 p = (vol_eye + t_current * grid_ray_dir);
     p = clamp(p, vec3(0), vec3(macrogrid_dims - 1));
-
     const vec3 inv_grid_ray_dir = 1.0 / grid_ray_dir;
-
     vec3 cell = floor(p);
 
     // find intersection point in the grid relative to the coarsed block (16x16x16)
@@ -100,11 +100,11 @@ void main() {
     vec3 t_max = mix(t_max_pos, t_max_neg, is_neg_dir);
     const ivec3 grid_step = ivec3(sign(grid_ray_dir));
 
-    const vec3 t_max_neg1 = (cell1 - vol_eye1) * inv_grid_ray_dir1;
-    //we will again have vec3(1) because we would now consider 16 block as 1 unit
-    const vec3 t_max_pos1 = (cell1+ vec3(1) - vol_eye1) * inv_grid_ray_dir1; 
-    is_neg_dir = lessThan(grid_ray_dir1, vec3(0));
-    vec3 t_max1 = mix(t_max_pos1, t_max_neg1, is_neg_dir);
+    // const vec3 t_max_neg1 = (cell1 - vol_eye1) * inv_grid_ray_dir1;
+    // const vec3 t_max_pos1 = (cell1+ vec3(1) - vol_eye1) * inv_grid_ray_dir1; 
+    // we dont need to do this because it is same vector so value will be same but doing just for sanity
+    // is_neg_dir = lessThan(grid_ray_dir1, vec3(0));
+    // vec3 t_max1 = mix(t_max_pos1, t_max_neg1, is_neg_dir);
     const ivec3 grid_step1 = ivec3(sign(grid_ray_dir1));
     
     // Note: each voxel is a 1^3 box on the grid
@@ -116,7 +116,7 @@ void main() {
     //while not out of the grid
     while(!outside_grid(cell1, coarsedgrid_dims)){
         const ivec3 coarsedgrid_pos = ivec3(cell1);
-         float t_next = min(t_max1.x, min(t_max1.y, t_max1.z));
+         float t_next = min(t_max.x, min(t_max.y, t_max.z));
          if (t_next < t_current) {
             break;
         }
@@ -182,7 +182,7 @@ void main() {
             cell1.x += grid_step1.x;
             cell.x += 4*grid_step1.x;
             t_max.x += t_delta1.x;
-        } else if (t_current == t_max1.y) {
+        } else if (t_current == t_max.y) {
             cell1.y += grid_step1.y;
             cell.y += 4*grid_step1.y;
             t_max.y += t_delta1.y;
