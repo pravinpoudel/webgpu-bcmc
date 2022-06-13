@@ -35,7 +35,8 @@ void main(void)
     const uint id = block_ids[gl_GlobalInvocationID.x];
     blocks[gl_GlobalInvocationID.x].id = id;
     blocks[gl_GlobalInvocationID.x].ray_offset = block_ray_offsets[id];
-    blocks[gl_GlobalInvocationID.x].num_rays = block_num_rays[id];
+    //number of rays in that block
+    blocks[gl_GlobalInvocationID.x].num_rays = block_num_rays[id]; 
     // If the block is running in this pipeline it must be visible,
     // so if it's not active, then it's an LOD block
     blocks[gl_GlobalInvocationID.x].lod = block_active[id] == 0 ? 1 : 0;

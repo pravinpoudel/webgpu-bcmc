@@ -18,11 +18,13 @@ layout(set = 1, binding = 1, std430) buffer RayInformation
     RayInfo rays[];
 };
 
+// compact ray buffer
 layout(set = 1, binding = 2, std430) buffer RayIDs
 {
     uint ray_ids[];
 };
 
+//combined block buffer with its id, ray_offset, number of rays and lod (active?1:0)
 layout(set = 1, binding = 3, std430) buffer BlockInformation
 {
     BlockInfo blocks[];
@@ -227,6 +229,8 @@ void main(void)
         block_info = blocks[gl_WorkGroupID.x];
     }
     barrier();
+
+    //if this block does not have rays
     if (block_info.num_rays == 0) { 
         return;
     }
@@ -236,11 +240,18 @@ void main(void)
     const uvec3 block_pos = block_id_to_pos(block_info.id) * 4;
 
     uvec3 block_dims;
+
+    // if that block is active
     if (block_info.lod == 0) {
-        block_dims = load_block(block_info.id);
-    } else {
+        block_dims = load_block(block_info.id); 
+    } 
+    // if that block is not active;
+    // ok, so ghost voxel loading is not only done here but also while loading active block to load ghost block if needed in neighbour
+    // which is needed because of dual grid we have created (not for better understanding in) 
+    else {
         // Don't load the block data if we're doing LOD
-        block_dims = compute_block_dims_with_ghost(block_pos / 4);
+        block_dims = compute_block_dims_with_ghost(block_pos / 4); // return the dimension of block + neighbour i.e (5, 5, 5) in non-boundary case
+        // there is sometthing on checking cache's value; i didn't understand so check it later with Will (reminder!)
     }
 
     vec3 volume_translation = vec3(0) - volume_scale.xyz * 0.5;

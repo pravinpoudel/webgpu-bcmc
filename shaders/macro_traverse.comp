@@ -2,8 +2,7 @@
 
 #include "util.glsl"
 
-layout(set = 0, binding = 0, std140) uniform VolumeParams
-{
+layout(set = 0, binding = 0, std140) uniform VolumeParams {
     uvec4 volume_dims;
     uvec4 padded_dims;
     vec4 volume_scale;
@@ -12,21 +11,18 @@ layout(set = 0, binding = 0, std140) uniform VolumeParams
     uint image_width;
 };
 
-layout(set = 0, binding = 1, std140) uniform ViewParams
-{
+layout(set = 0, binding = 1, std140) uniform ViewParams {
     mat4 proj_view;
     vec4 eye_pos;
     vec4 eye_dir;
     float near_plane;
 };
 
-layout(set = 0, binding = 2, std430) buffer BlockRanges
-{
+layout(set = 0, binding = 2, std430) buffer BlockRanges {
     BlockRange block_ranges[];
 };
 
-layout(set = 0, binding = 3, std430) buffer RayInformation
-{
+layout(set = 0, binding = 3, std430) buffer RayInformation {
     RayInfo rays[];
 };
 
@@ -37,15 +33,15 @@ vec4 block_id_to_color(const uvec3 block_id) {
     return vec4(vec3(block_id) / n_blocks, 1.0);
 }
 
-vec2 findCoarsedRange(const uvec3 pos){
+vec2 findCoarsedRange(const uvec3 pos) {
     const uvec3 n_blocks = padded_dims.xyz / uvec3(4);
-    vec2 coarsed_range = vec2(FLT_MAX, 0.0);
-    for(int i =0; i<4; i++){
-        for(int j=0; j<4; j++){
-            for(int k=0; k<4; k++){
-                uvec3 child_block_pos = 4*pos + uvec3(i, j, k); //check for the boundary condition
-                if(!any(greaterThanEqual(child_block_pos, n_blocks))){
-                    uint child_block_id = child_block_pos.x + n_blocks.x * (child_block_pos.y + n_blocks.y * child_block_pos.z); 
+    vec2 coarsed_range = vec2(FLT_MAX, -65536);
+    for (int i = 0; i < 4; i++) {
+        for (int j = 0; j < 4; j++) {
+            for (int k = 0; k < 4; k++) {
+                uvec3 child_block_pos = 4 * pos + uvec3(i, j, k); //check for the boundary condition
+                if (!any(greaterThanEqual(child_block_pos, n_blocks))) {
+                    uint child_block_id = child_block_pos.x + n_blocks.x * (child_block_pos.y + n_blocks.y * child_block_pos.z);
                     coarsed_range.x = min(coarsed_range.x, block_ranges[child_block_id].range.x);
                     coarsed_range.y = max(coarsed_range.y, block_ranges[child_block_id].range.y);
                 }
@@ -65,12 +61,12 @@ void main() {
     const uvec3 n_blocks = padded_dims.xyz / uvec3(4);
     const vec3 macrogrid_dims = vec3(n_blocks);
 
-    const uvec3 n_coarsedGrid = uvec3(ceil(padded_dims.x/16), ceil(padded_dims.y/16), ceil(padded_dims.z/16));
+    const uvec3 n_coarsedGrid = uvec3(ceil(padded_dims.x / 16), ceil(padded_dims.y / 16), ceil(padded_dims.z / 16));
     const vec3 coarsedgrid_dims = vec3(n_coarsedGrid);
     // Transform the ray into the dual grid space
     vec3 volume_translation = vec3(0) - volume_scale.xyz * 0.5;
-	vec3 transformed_eye = (eye_pos.xyz - volume_translation) / volume_scale.xyz;
-	vec3 vol_eye = transformed_eye * volume_dims.xyz - vec3(0.5);
+    vec3 transformed_eye = (eye_pos.xyz - volume_translation) / volume_scale.xyz;
+    vec3 vol_eye = transformed_eye * volume_dims.xyz - vec3(0.5);
     vec3 grid_ray_dir = rays[ray_index].ray_dir;
 
     // Transform to the macrocell grid
@@ -80,23 +76,26 @@ void main() {
     grid_ray_dir *= 0.25;
 
     float t_current = rays[ray_index].t;
-	vec3 p = (vol_eye + t_current * grid_ray_dir);
+    vec3 p = (vol_eye + t_current * grid_ray_dir);
     p = clamp(p, vec3(0), vec3(macrogrid_dims - 1));
     const vec3 inv_grid_ray_dir = 1.0 / grid_ray_dir;
     vec3 cell = floor(p);
 
     // find intersection point in the grid relative to the coarsed block (16x16x16)
-    vec3 vol_eye1 =vol_eye*0.25;
-    vec3 grid_ray_dir1 = grid_ray_dir*0.25;
+    vec3 vol_eye1 = vol_eye * 0.25;
+    vec3 grid_ray_dir1 = grid_ray_dir * 0.25;
     vec3 p1 = (vol_eye1 + t_current * grid_ray_dir1);
     p1 = clamp(p1, vec3(0), vec3(coarsedgrid_dims - 1));
-    const vec3 inv_grid_ray_dir1 = 1.0/grid_ray_dir1;
+
+    const vec3 inv_grid_ray_dir1 = 1.0 / grid_ray_dir1;
     vec3 cell1 = floor(p1);
 
     const vec3 t_max_neg = (cell - vol_eye) * inv_grid_ray_dir;
     const vec3 t_max_pos = (cell + vec3(1) - vol_eye) * inv_grid_ray_dir;
     bvec3 is_neg_dir = lessThan(grid_ray_dir, vec3(0));
     // Pick between positive/negative t_max based on the ray sign
+    // minimum traversal length is size of voxel/ray direction; in our case size of voxel is 1 so inverse ray direction
+    // is traversal length in respective direction but that is direction so we do sign() to get modulus value
     vec3 t_max = mix(t_max_pos, t_max_neg, is_neg_dir);
     const ivec3 grid_step = ivec3(sign(grid_ray_dir));
 
@@ -105,24 +104,25 @@ void main() {
     // we dont need to do this because it is same vector so value will be same but doing just for sanity
     // is_neg_dir = lessThan(grid_ray_dir1, vec3(0));
     // vec3 t_max1 = mix(t_max_pos1, t_max_neg1, is_neg_dir);
-    const ivec3 grid_step1 = ivec3(sign(grid_ray_dir1));
-    
+  
     // Note: each voxel is a 1^3 box on the grid
     const vec3 t_delta = abs(inv_grid_ray_dir);
     const vec3 t_delta1 = abs(inv_grid_ray_dir1);
 
     //while not outside the coarsed grid
-
     //while not out of the grid
-    while(!outside_grid(cell1, coarsedgrid_dims)){
+    while (!outside_grid(cell1, coarsedgrid_dims)) {
         const ivec3 coarsedgrid_pos = ivec3(cell1);
-         float t_next = min(t_max.x, min(t_max.y, t_max.z));
-         if (t_next < t_current) {
+        float t_next = min(t_max.x, min(t_max.y, t_max.z));
+        if (t_next < t_current) {
             break;
         }
         vec2 coarsed_grid_range = findCoarsedRange(coarsedgrid_pos);
         if (isovalue >= coarsed_grid_range.x && isovalue <= coarsed_grid_range.y) {
-            ivec3 localBoundary = ivec3(coarsedgrid_pos)*4 + ivec3(4, 4, 4);
+            ivec3 localBoundary = ivec3(coarsedgrid_pos) * 4 + ivec3(4, 4, 4);
+            p = (vol_eye + t_current * grid_ray_dir);
+            p = clamp(p, vec3(0), vec3(macrogrid_dims - 1));
+            cell = floor(p);
             while (!outside_grid(cell, localBoundary)) {
                 const ivec3 block_pos = ivec3(cell);
                 t_next = min(t_max.x, min(t_max.y, t_max.z));
@@ -134,64 +134,59 @@ void main() {
                 for (int k = 0; k < 2; ++k) {
                     for (int j = 0; j < 2; ++j) {
                         for (int i = 0; i < 2; ++i) {
-                            const uvec3 neighbor = uvec3(i, j, k); 
+                            const uvec3 neighbor = uvec3(i, j, k);
                             const uvec3 coords = block_pos + neighbor;
-                            if (neighbor == uvec3(0) || any(lessThan(coords, uvec3(0)))
-                                    || any(greaterThanEqual(coords, n_blocks)))
-                            {
+                            if (neighbor == uvec3(0) || any(lessThan(coords, uvec3(0))) ||
+                                any(greaterThanEqual(coords, n_blocks))) {
                                 continue;
                             }
-                        // TODO: use fcn
+                            // TODO: use fcn
                             const uint neighbor_id = coords.x + n_blocks.x * (coords.y + n_blocks.y * coords.z);
                             cell_range.x = min(block_ranges[neighbor_id].range.x, cell_range.x);
                             cell_range.y = max(block_ranges[neighbor_id].range.y, cell_range.y);
                         }
                     }
                 }
-
-            if (isovalue >= cell_range.x && isovalue <= cell_range.y) {
-                rays[ray_index].block_id = block_id;
-                rays[ray_index].t = t_current;
-                rays[ray_index].t_next = t_next;
-                return;
+                if (isovalue >= cell_range.x && isovalue <= cell_range.y) {
+                    rays[ray_index].block_id = block_id;
+                    rays[ray_index].t = t_current;
+                    rays[ray_index].t_next = t_next;
+                    return;
+                }
+                //2 ray movement one in block and coarsed group
+                t_current = t_next;
+                // Advance in the grid
+                if (t_current == t_max.x) {
+                    cell.x += grid_step.x;
+                    t_max.x += t_delta.x;
+                } else if (t_current == t_max.y) {
+                    cell.y += grid_step.y;
+                    t_max.y += t_delta.y;
+                } else {
+                    cell.z += grid_step.z;
+                    t_max.z += t_delta.z;
+                }
             }
-             //2 ray movement one in block and coarsed group
+            vec3 current_p1 = (vol_eye1 + t_current * grid_ray_dir1);
+            current_p1 = clamp(current_p1, vec3(0), vec3(coarsedgrid_dims - 1));
+            cell1 = floor(current_p1);
+        }
+        else {
             t_current = t_next;
-            // Advance in the grid
             if (t_current == t_max.x) {
-                cell.x += grid_step.x;
-                cell1.x += 0.25*grid_step.x;
-                t_max.x += t_delta.x;
-
+                t_max.x += t_delta1.x;
+                cell1.x += grid_step.x;
             } else if (t_current == t_max.y) {
-                cell.y += grid_step.y;
-                cell1.y += 0.25*grid_step.y;
-                t_max.y += t_delta.y;
+                t_max.y += t_delta1.y;
+                cell1.y += grid_step.y;
             } else {
-                cell.z += grid_step.z;
-                cell1.z += 0.25*grid_step.z;
-                t_max.z += t_delta.z;
+                t_max.z += t_delta1.z;
+                cell1.z += grid_step.z;
             }
+            vec3 current_p = (vol_eye + t_current * grid_ray_dir);
+            current_p = clamp(current_p, vec3(0), vec3(macrogrid_dims - 1));
+            cell = floor(current_p);
         }
-    }
-    else{
-         //2 ray movement one in block and coarsed group
-        t_current = t_next;
-        // Advance in the grid
-        if (t_current == t_max.x) {
-            cell1.x += grid_step1.x;
-            cell.x += 4*grid_step1.x;
-            t_max.x += t_delta1.x;
-        } else if (t_current == t_max.y) {
-            cell1.y += grid_step1.y;
-            cell.y += 4*grid_step1.y;
-            t_max.y += t_delta1.y;
-        } else {
-            cell1.z += grid_step1.z;
-            cell.z += 4*grid_step1.z;
-            t_max.z += t_delta1.z;
-        }
-    }
     }
     rays[ray_index].block_id = UINT_MAX;
     rays[ray_index].t = FLT_MAX;

@@ -150,7 +150,9 @@ void load_voxel(const uint neighbor_id,
         const uvec3 neighbor_voxel_pos,
         const uvec3 block_dims)
 {
+    //block_dims is block dimension with ghost voxel (if any) added
     const uint neighbor_location = block_locations[neighbor_id];
+    //voxel id ( but local)
     const uint ghost_voxel_id = compute_voxel_id(ghost_voxel_pos, block_dims);
     const uint neighbor_voxel_id = compute_voxel_id(neighbor_voxel_pos, uvec3(4));
     volume_block[ghost_voxel_id] = decompressed[neighbor_location * BLOCK_NUM_VOXELS + neighbor_voxel_id];
@@ -172,6 +174,7 @@ uvec3 load_block(const uint block_id)
 
     const uvec3 block_dims = compute_block_dims_with_ghost(block_pos);
 
+    // local position within that block
     const uvec3 voxel_pos = voxel_id_to_voxel(gl_LocalInvocationID.x);
     load_voxel(block_id, voxel_pos, voxel_pos, block_dims);
 
