@@ -21,6 +21,10 @@ struct BlockRange {
     float corners[8];
 };
 
+struct CoarsedBlockRange{
+    vec2 range;
+};
+
 struct BlockInfo {
     uint id;
     uint ray_offset;

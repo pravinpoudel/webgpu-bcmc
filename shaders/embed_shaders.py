@@ -20,6 +20,7 @@ shaders = [
     "compute_initial_rays.vert",
     "compute_initial_rays.frag",
     "zfp_compute_block_range.comp",
+    "compute_coarsed_block_ranges.comp",
     "zfp_decompress_block.comp",
     "lru_cache_init.comp",
     "lru_cache_mark_new_items.comp",
