@@ -56,10 +56,12 @@ void main(void){
 	// i dont think we need to do this because we are considering
 	//totalWorkGroups % device.limits.maxComputeWorkgroupsPerDimension on dispatch size array calculation
 
-	if(coarsed_block_index>= total_coarsed_block){
-		return;
-	}
+	// if(coarsed_block_index>= total_coarsed_block){
 
+	// 	return;
+	// }
+    coarsedRange[coarsed_block_index].range = vec2(20.0, 20.0);
+    return;
 
 	uvec3 coarsedBlock;
     coarsedBlock.x = (coarsed_block_index % 16) * 16;
