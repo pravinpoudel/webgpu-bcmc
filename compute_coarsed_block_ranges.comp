@@ -38,12 +38,8 @@ layout(set = 0, binding = 2, std430) buffer BlockInformation
 
 layout(set = 0, binding = 3, std430) buffer CoarseBlockInformation
 {
-    CoarsedBlockRange coarsedRange[];
+    CoarseBlockRange coarsedRange[];
 };
-
-
-
-// uniform layout(set = 0, binding = 4, rgba8) writeonly image2D render_target;
 
 
 layout(set = 1, binding = 0, std140) uniform BlockIDOffset
@@ -56,7 +52,8 @@ void main(void){
 	const uint total_coarsed_block = coarsed_dims.x*coarsed_dims.y*coarsed_dims.z;
 
 	// i dont think we need to do this because we are considering
-	// totalWorkGroups % device.limits.maxComputeWorkgroupsPerDimension on dispatch size array calculation
+	//totalWorkGroups % device.limits.maxComputeWorkgroupsPerDimension on dispatch size array calculation
+
 	if(coarsed_block_index>= total_coarsed_block){
 		return;
 	}
@@ -66,8 +63,9 @@ void main(void){
     coarsedBlock.y = ((coarsed_block_index / 16) % 16) * 16;
     coarsedBlock.z = (coarsed_block_index / (16 * 16)) * 16; // integer division is integer implicitly
 
+
     const uvec3 n_blocks = padded_dims.xyz / uvec3(4);
-    vec2 coarsed_range = vec2(1e20, -1e20);
+    uvec2 coarsed_range = uvec2(FLT_MAX, -1e20);
 
     bvec3 partial = greaterThan(coarsedBlock + 4, n_blocks.xyz);
 	uvec3 local_block_count = uvec3(partial.x ? n_blocks.x - coarsedBlock.x : 4,
@@ -77,7 +75,7 @@ void main(void){
     for (int i = 0; i < local_block_count.x; i++) {
         for (int j = 0; j < local_block_count.y; j++) {
             for (int k = 0; k < local_block_count.z; k++) {
-                uvec3 child_block_pos = 4 * coarsedBlock + uvec3(i, j, k); //check for the boundary condition
+                uvec3 child_block_pos = 4 * pos + uvec3(i, j, k); //check for the boundary condition
                 if (!any(greaterThanEqual(child_block_pos, n_blocks))) {
                     uint child_block_id = child_block_pos.x + n_blocks.x * (child_block_pos.y + n_blocks.y * child_block_pos.z);
                     coarsed_range.x = min(coarsed_range.x, block_ranges[child_block_id].range.x);
@@ -86,8 +84,5 @@ void main(void){
             }
         }
     }
-    coarsedRange[coarsed_block_index].range = uvec2(coarsed_range);
-
-    //imagestore() is glsl function write a textel into an image (image, cordinate,sample (optional), date)
-    // imageStore(render_target, ivec2(coarsedBlock.x, coarsedBlock.y), vec4(1.0, 0.1, 1.0, 1.0));
+    coarsedRange[block_index].range = coarsed_range;
 }

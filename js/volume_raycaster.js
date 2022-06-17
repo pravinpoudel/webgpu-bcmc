@@ -1125,7 +1125,7 @@ VolumeRaycaster.prototype.computeCoarsedRange = async function () {
     mappedAtCreation: true,
   });
 
-  let coarsedDimension = new Uint32Array(
+  let coarsedDimension = new Float32Array(
     this.coarsedInfoBuffer.getMappedRange()
   );
 
@@ -1189,13 +1189,13 @@ VolumeRaycaster.prototype.computeCoarsedRange = async function () {
         },
       },
 
-      {
-        binding: 4,
-        visibility: GPUShaderStage.COMPUTE,
-        texture: {
-          storageTexture: { access: "write-only", format: "rgba8unorm" },
-        },
-      },
+      // {
+      //   binding: 4,
+      //   visibility: GPUShaderStage.COMPUTE,
+      //   texture: {
+      //     storageTexture: { access: "write-only", format: "rgba8unorm" },
+      //   },
+      // },
     ],
   });
 
@@ -1240,7 +1240,7 @@ VolumeRaycaster.prototype.computeCoarsedRange = async function () {
         resource: { buffer: this.coarsedRangeBuffer },
       },
 
-      { binding: 4, resource: this.renderTarget.createView() },
+      // { binding: 4, resource: this.renderTarget.createView() },
     ],
   });
 
@@ -1268,12 +1268,12 @@ VolumeRaycaster.prototype.computeCoarsedRange = async function () {
     0 /* destination offset */,
     this.totalCoarsedBlock * 2 * 4 /* size in byte */
   );
-  await this.device.queue.submit([commandEncoder.finish()]);
-
+  this.device.queue.submit([commandEncoder.finish()]);
+  await this.device.queue.onSubmittedWorkDone();
   await gpuReadBufferCR.mapAsync(GPUMapMode.READ);
   const copyArrayBuffer = gpuReadBufferCR.getMappedRange();
   let data = new Float32Array(copyArrayBuffer);
-  console.log("data is", data);
+  console.log(data);
   gpuReadBufferCR.unmap();
 };
 // Progressively compute the surface, returns true when rendering is complete
