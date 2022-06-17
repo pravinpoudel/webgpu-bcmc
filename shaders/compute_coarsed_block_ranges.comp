@@ -41,6 +41,8 @@ layout(set = 0, binding = 3, std430) buffer CoarseBlockInformation
     CoarsedBlockRange coarsedRange[];
 };
 
+
+
 uniform layout(set = 0, binding = 4, rgba8) writeonly image2D render_target;
 
 
@@ -55,17 +57,14 @@ void main(void){
 
 	// i dont think we need to do this because we are considering
 	// totalWorkGroups % device.limits.maxComputeWorkgroupsPerDimension on dispatch size array calculation
-
 	if(coarsed_block_index>= total_coarsed_block){
-
 		return;
 	}
-    
+
 	uvec3 coarsedBlock;
     coarsedBlock.x = (coarsed_block_index % 16) * 16;
     coarsedBlock.y = ((coarsed_block_index / 16) % 16) * 16;
     coarsedBlock.z = (coarsed_block_index / (16 * 16)) * 16; // integer division is integer implicitly
-
 
     const uvec3 n_blocks = padded_dims.xyz / uvec3(4);
     vec2 coarsed_range = vec2(1e20, -1e20);
@@ -90,5 +89,5 @@ void main(void){
     coarsedRange[coarsed_block_index].range = coarsed_range;
 
     //imagestore() is glsl function write a textel into an image (image, cordinate,sample (optional), date)
-    // imageStore(render_target, ivec2(coarsedBlock.x, coarsedBlock.y), vec4(coarsed_range.x, coarsed_range.y, 1.0, 1.0));
+    imageStore(render_target, ivec2(coarsedBlock.x, coarsedBlock.y), vec4(1.0, 0.1, 1.0, 1.0));
 }

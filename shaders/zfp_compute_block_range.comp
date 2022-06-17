@@ -12,6 +12,11 @@ layout(set = 0, binding = 2, std430) buffer BlockInformation
     BlockRange block_ranges[];
 };
 
+layout(set = 0, binding = 3, std430) buffer ResultInformation
+{
+    float result_read_range[];
+};
+
 layout(set = 1, binding = 0, std140) uniform BlockIDOffset
 {
     uint block_id_offset;
@@ -73,6 +78,9 @@ void main(void)
             for (uint x = 0; x < partial_size.x; ++x) {
                 block_range.x = min(block_range.x, decompressed_block[16 * z + 4 * y + x]);
                 block_range.y = max(block_range.y, decompressed_block[16 * z + 4 * y + x]);
+                result_read_range[2*block_index] =  block_range.x ;
+                result_read_range[2*block_index +1] = block_range.y;
+
             }
         }
     }
