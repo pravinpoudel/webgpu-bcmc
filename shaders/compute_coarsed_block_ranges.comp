@@ -54,15 +54,13 @@ void main(void){
 	const uint total_coarsed_block = coarsed_dims.x*coarsed_dims.y*coarsed_dims.z;
 
 	// i dont think we need to do this because we are considering
-	//totalWorkGroups % device.limits.maxComputeWorkgroupsPerDimension on dispatch size array calculation
+	// totalWorkGroups % device.limits.maxComputeWorkgroupsPerDimension on dispatch size array calculation
 
-	// if(coarsed_block_index>= total_coarsed_block){
+	if(coarsed_block_index>= total_coarsed_block){
 
-	// 	return;
-	// }
-    coarsedRange[coarsed_block_index].range = vec2(20.0, 20.0);
-    return;
-
+		return;
+	}
+    
 	uvec3 coarsedBlock;
     coarsedBlock.x = (coarsed_block_index % 16) * 16;
     coarsedBlock.y = ((coarsed_block_index / 16) % 16) * 16;
