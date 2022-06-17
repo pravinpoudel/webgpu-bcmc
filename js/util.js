@@ -7,55 +7,58 @@
 //           passed as an ArrayBuffer
 // }
 // ID offset (u32),
-function buildPushConstantsBuffer(device, totalWorkGroups, pushConstants)
-{
-    var dynamicOffsets = [];
-    var dispatchSizes = [];
+function buildPushConstantsBuffer(device, totalWorkGroups, pushConstants) {
+  var dynamicOffsets = [];
+  var dispatchSizes = [];
 
-    var numDynamicOffsets =
-        Math.ceil(totalWorkGroups / device.limits.maxComputeWorkgroupsPerDimension);
-    var idOffsetsBuffer = device.createBuffer({
-        size: 256 * numDynamicOffsets,
-        usage: GPUBufferUsage.UNIFORM,
-        mappedAtCreation: true,
-    });
-    {
-        var pushConstantsView = null;
-        if (pushConstants) {
-            pushConstantsView = new Uint8Array(pushConstants);
-            console.log(`got push constants of size ${pushConstantsView.length}`);
-        }
-        var mapping = idOffsetsBuffer.getMappedRange();
-        for (var i = 0; i < numDynamicOffsets; ++i) {
-            dynamicOffsets.push(i * 256);
+  //maxComputeWorkgroupsPerDimension is maximum value for number of workgroup.xyz. (current state: 65535)
+  var numDynamicOffsets = Math.ceil(
+    totalWorkGroups / device.limits.maxComputeWorkgroupsPerDimension
+  );
 
-            if (i + 1 < numDynamicOffsets) {
-                dispatchSizes.push(device.limits.maxComputeWorkgroupsPerDimension);
-            } else {
-                dispatchSizes.push(totalWorkGroups %
-                                   device.limits.maxComputeWorkgroupsPerDimension);
-            }
-
-            // Write the push constants data
-            var u32view = new Uint32Array(mapping, i * 256, 2);
-            u32view[0] = device.limits.maxComputeWorkgroupsPerDimension * i;
-            u32view[1] = totalWorkGroups;
-
-            // Copy in any additional push constants data if provided
-            if (pushConstantsView) {
-                var u8view = new Uint8Array(mapping, i * 256 + 8, 248);
-                u8view.set(pushConstantsView);
-            }
-        }
-        idOffsetsBuffer.unmap();
+  var idOffsetsBuffer = device.createBuffer({
+    size: 256 * numDynamicOffsets,
+    usage: GPUBufferUsage.UNIFORM,
+    mappedAtCreation: true,
+  });
+  {
+    var pushConstantsView = null;
+    if (pushConstants) {
+      pushConstantsView = new Uint8Array(pushConstants);
+      console.log(`got push constants of size ${pushConstantsView.length}`);
     }
-    dynamicOffsets = new Uint32Array(dynamicOffsets);
+    var mapping = idOffsetsBuffer.getMappedRange();
+    for (var i = 0; i < numDynamicOffsets; ++i) {
+      dynamicOffsets.push(i * 256);
 
-    return {
-        nOffsets: numDynamicOffsets,
-        gpuBuffer: idOffsetsBuffer,
-        dynamicOffsets: dynamicOffsets,
-        dispatchSizes: dispatchSizes,
-    };
+      if (i + 1 < numDynamicOffsets) {
+        dispatchSizes.push(device.limits.maxComputeWorkgroupsPerDimension);
+      } else {
+        dispatchSizes.push(
+          totalWorkGroups % device.limits.maxComputeWorkgroupsPerDimension
+        );
+      }
+
+      // Write the push constants data
+      // last argument which is length is not length in byte but number of element of ui32
+      var u32view = new Uint32Array(mapping, i * 256, 2);
+      u32view[0] = device.limits.maxComputeWorkgroupsPerDimension * i;
+      u32view[1] = totalWorkGroups;
+
+      // Copy in any additional push constants data if provided
+      if (pushConstantsView) {
+        var u8view = new Uint8Array(mapping, i * 256 + 8, 248);
+        u8view.set(pushConstantsView);
+      }
+    }
+    idOffsetsBuffer.unmap();
+  }
+  dynamicOffsets = new Uint32Array(dynamicOffsets);
+
+  return {
+    nOffsets: numDynamicOffsets,
+    gpuBuffer: idOffsetsBuffer,
+    dynamicOffsets: dynamicOffsets,
+    dispatchSizes: dispatchSizes,
+  };
 }
-

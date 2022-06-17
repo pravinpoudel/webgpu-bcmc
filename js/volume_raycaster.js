@@ -2,7 +2,17 @@ let offsetCheck = 0;
 
 var VolumeRaycaster = function (device, canvas) {
   this.device = device;
+  // this constructor creates pipeline for three pass to find total rays and prefix sum of active rays
   this.scanPipeline = new ExclusiveScanPipeline(device);
+  /* ----------------------------------------------------------------------------------------------------------------------
+  same scanPipeline instance is used in the program as it's just a pipeline nothing more but when scan method of scanPipeline is called
+  it creates an instance of ExclusiveScanner i.e new scanner- with sent data or buffer to scan 
+
+  it has only function as it's method- scan- which scan the data or buffer sent. 
+  why we need to peform this operation (scan)? We need this when we want to know total value and prefix sum of values in array
+  which is useful for so many things but right now i only know that it can be used as offset for each block data read.
+ ------------------------------------------------------------------------------------------------------------------------- */
+
   this.streamCompact = new StreamCompact(device);
   this.numActiveBlocks = 0;
   this.renderComplete = false;
@@ -66,6 +76,7 @@ var VolumeRaycaster = function (device, canvas) {
         this.computeBlockRangeS1B0DynamicBGLayout,
       ],
     }),
+
     compute: {
       module: device.createShaderModule({
         code: zfp_compute_block_range_comp_spv,
@@ -180,6 +191,8 @@ var VolumeRaycaster = function (device, canvas) {
       entryPoint: "main",
     },
   });
+
+  console.log(this.resetRaysPipeline);
 
   this.computeInitialRaysBGLayout = device.createBindGroupLayout({
     entries: [
@@ -299,6 +312,62 @@ var VolumeRaycaster = function (device, canvas) {
     ],
   };
 
+  this.coarsedRangeLayout = this.device.createBindGroupLayout({
+    entries: [
+      {
+        binding: 0,
+        visibility: GPUShaderStage.COMPUTE,
+        buffer: {
+          type: "uniform",
+        },
+      },
+
+      {
+        binding: 1,
+        visibility: GPUShaderStage.COMPUTE,
+        buffer: {
+          type: "uniform",
+        },
+      },
+
+      {
+        binding: 2,
+        visibility: GPUShaderStage.COMPUTE,
+        buffer: {
+          type: "storage",
+        },
+      },
+
+      {
+        binding: 3,
+        visibility: GPUShaderStage.COMPUTE,
+        buffer: {
+          type: "storage",
+        },
+      },
+
+      {
+        binding: 4,
+        visibility: GPUShaderStage.COMPUTE,
+        texture: {
+          storageTexture: { access: "write-only", format: "rgba8unorm" },
+        },
+      },
+    ],
+  });
+
+  this.coarsedRangePipeline = this.device.createComputePipeline({
+    layout: this.device.createPipelineLayout({
+      bindGroupLayouts: [this.coarsedRangeLayout],
+    }),
+    compute: {
+      module: this.device.createShaderModule({
+        code: compute_coarsed_block_ranges_comp_spv,
+      }),
+      entryPoint: "main",
+    },
+  });
+
   this.macroTraverseBGLayout = device.createBindGroupLayout({
     entries: [
       {
@@ -322,6 +391,7 @@ var VolumeRaycaster = function (device, canvas) {
           type: "storage",
         },
       },
+
       {
         binding: 3,
         visibility: GPUShaderStage.COMPUTE,
@@ -330,8 +400,16 @@ var VolumeRaycaster = function (device, canvas) {
         },
       },
       {
-        // Also pass the render target for debugging
         binding: 4,
+        visibility: GPUShaderStage.COMPUTE,
+        buffer: {
+          type: "storage",
+        },
+      },
+
+      {
+        // Also pass the render target for debugging
+        binding: 5,
         visibility: GPUShaderStage.COMPUTE,
         storageTexture: { access: "write-only", format: renderTargetFormat },
       },
@@ -545,6 +623,8 @@ var VolumeRaycaster = function (device, canvas) {
       GPUBufferUsage.COPY_DST |
       GPUBufferUsage.COPY_SRC,
   });
+
+  //scanner to scan the active rays
   this.scanRayActive = this.scanPipeline.prepareGPUInput(
     this.rayActiveCompactOffsetBuffer,
     this.scanPipeline.getAlignedSize(this.canvas.width * this.canvas.height)
@@ -753,6 +833,37 @@ VolumeRaycaster.prototype.setCompressedVolume = async function (
   this.totalBlocks =
     (this.paddedDims[0] * this.paddedDims[1] * this.paddedDims[2]) / 64;
 
+  this.paddedCoarsedDims = [
+    alignTo(this.volumeDims[0], 16),
+    alignTo(this.volumeDims[1], 16),
+    alignTo(this.volumeDims[2], 16),
+  ];
+  this.coarsedGridDims = [
+    this.paddedCoarsedDims[0] / 16,
+    this.paddedCoarsedDims[1] / 16,
+    this.paddedCoarsedDims[2] / 16,
+  ];
+
+  this.totalCoarsedBlock =
+    this.coarsedGridDims[0] * this.coarsedGridDims[1] * this.coarsedGridDims[2];
+
+  this.coarsedRangeBuffer = this.device.createBuffer({
+    size: this.totalCoarsedBlock * 2 * 4,
+    usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_SRC,
+  });
+
+  this.coarsedInfoBuffer = this.device.createBuffer({
+    size: 4 * 4,
+    usage: GPUBufferUsage.UNIFORM,
+    mappedAtCreation: true,
+  });
+
+  let coarsedDimension = new Uint32Array(
+    this.coarsedInfoBuffer.getMappedRange()
+  );
+  coarsedDimension.set(this.coarsedGridDims);
+  this.coarsedInfoBuffer.unmap();
+
   console.log(`total blocks ${this.totalBlocks}`);
   const groupThreadCount = 32;
   this.numWorkGroups = Math.ceil(this.totalBlocks / groupThreadCount);
@@ -779,7 +890,6 @@ VolumeRaycaster.prototype.setCompressedVolume = async function (
     var maxBits = (1 << (2 * 3)) * compressionRate;
     var buf = new Uint32Array(mapping);
     buf.set(volumeDims);
-    console.log(volumeDims);
     buf.set(this.paddedDims, 4);
     buf.set([maxBits], 12);
     buf.set([this.canvas.width], 14);
@@ -921,13 +1031,21 @@ VolumeRaycaster.prototype.setCompressedVolume = async function (
       {
         binding: 3,
         resource: {
+          buffer: this.coarsedRangeBuffer,
+        },
+      },
+
+      {
+        binding: 4,
+        resource: {
           buffer: this.rayInformationBuffer,
         },
       },
-      { binding: 4, resource: this.renderTarget.createView() },
+      { binding: 5, resource: this.renderTarget.createView() },
     ],
   });
 
+  //blockActive buffer is 0/1 array - active/not-active
   this.resetBlockActiveBG = this.device.createBindGroup({
     layout: this.resetBlockActiveBGLayout,
     entries: [
@@ -986,12 +1104,12 @@ VolumeRaycaster.prototype.setCompressedVolume = async function (
   this.rtBlocksPipelineBG1 = this.device.createBindGroup({
     layout: this.rtBlocksPipelineBG1Layout,
     entries: [
-      { binding: 0, resource: { buffer: this.viewParamBuf } },
-      { binding: 1, resource: { buffer: this.rayInformationBuffer } },
-      { binding: 2, resource: { buffer: this.rayIDBuffer } },
-      { binding: 3, resource: { buffer: this.combinedBlockInformationBuffer } },
+      { binding: 0, resource: { buffer: this.viewParamBuf } }, //projview, camera_eye_pos, eyeDirection, nearplane (name doesnot allign with variable name)
+      { binding: 1, resource: { buffer: this.rayInformationBuffer } }, // ray information buffer is an object with rays { block_id, t, t_next}
+      { binding: 2, resource: { buffer: this.rayIDBuffer } }, // rayidbuffer is a compact ray buffer with buffer of active rays with value of objects as an id of that active ray
+      { binding: 3, resource: { buffer: this.combinedBlockInformationBuffer } }, // buffer created in previous pass/pipeline; {id, rayoffset, num_rays, lod}
       { binding: 4, resource: this.renderTarget.createView() },
-      { binding: 5, resource: { buffer: this.blockRangesBuffer } },
+      { binding: 5, resource: { buffer: this.blockRangesBuffer } }, // this is buffer of vec2<min, max> of that specific block
     ],
   });
 };
@@ -1001,7 +1119,7 @@ VolumeRaycaster.prototype.computeBlockRanges = async function () {
   // it's a bit easier to just do it here
   // Decompress each block and compute its value range, output to the blockRangesBuffer
   this.blockRangesBuffer = this.device.createBuffer({
-    // Why is this 10 4byte vals?
+    // 10 * 4 -> its because this buffer hold array structure with a array[8] and range vec2 making total size of 10 float32
     size: this.totalBlocks * 10 * 4,
     usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_SRC,
   });
@@ -1054,7 +1172,29 @@ VolumeRaycaster.prototype.computeBlockRanges = async function () {
   }
 
   pass.end();
-  this.device.queue.submit([commandEncoder.finish()]);
+  await this.device.queue.submit([commandEncoder.finish()]);
+
+  const copyEncoder = this.device.createCommandEncoder();
+  const gpuReadBuffer = this.device.createBuffer({
+    size: this.totalBlocks * 10 * 4,
+    usage: GPUBufferUsage.COPY_DST | GPUBufferUsage.MAP_READ,
+  });
+
+  await copyEncoder.copyBufferToBuffer(
+    this.blockRangesBuffer /* source buffer */,
+    0 /* source offset */,
+    gpuReadBuffer /* destination buffer */,
+    0 /* destination offset */,
+    this.totalBlocks * 10 * 4 /* size */
+  );
+
+  await gpuReadBuffer.mapAsync(GPUMapMode.READ);
+  const copyArrayBuffer = gpuReadBuffer.getMappedRange();
+  console.log(new Float32Array(copyArrayBuffer));
+
+  // Submit copy commands.
+  const copyCommands = copyEncoder.finish();
+  await this.device.queue.submit([copyCommands]);
 };
 
 // Progressively compute the surface, returns true when rendering is complete
@@ -1109,8 +1249,10 @@ VolumeRaycaster.prototype.renderSurface = async function (
   }
   // for (var i = 0; i < 50; ++i) {
   console.log(`++++ Surface pass ${this.numPasses} ++++`);
-  var startPass = performance.now();
 
+  await this.computeCoarsedRange();
+
+  var startPass = performance.now();
   var start = performance.now();
   await this.macroTraverse();
   var end = performance.now();
@@ -1212,6 +1354,175 @@ VolumeRaycaster.prototype.computeInitialRays = async function (
   this.device.queue.submit([commandEncoder.finish()]);
 };
 
+VolumeRaycaster.prototype.computeCoarsedRange = async function () {
+  this.paddedCoarsedDims = [
+    alignTo(this.volumeDims[0], 16),
+    alignTo(this.volumeDims[1], 16),
+    alignTo(this.volumeDims[2], 16),
+  ];
+  this.coarsedGridDims = [
+    this.paddedCoarsedDims[0] / 16,
+    this.paddedCoarsedDims[1] / 16,
+    this.paddedCoarsedDims[2] / 16,
+  ];
+
+  this.totalCoarsedBlock =
+    this.coarsedGridDims[0] * this.coarsedGridDims[1] * this.coarsedGridDims[2];
+
+  this.coarsedRangeBuffer = this.device.createBuffer({
+    size: this.totalCoarsedBlock * 2 * 4,
+    usage: GPUBufferUsage.STORAGE,
+  });
+
+  this.coarsedInfoBuffer = this.device.createBuffer({
+    size: 4 * 4,
+    usage: GPUBufferUsage.UNIFORM,
+    mappedAtCreation: true,
+  });
+
+  let coarsedDimension = new Uint32Array(
+    this.coarsedInfoBuffer.getMappedRange()
+  );
+  coarsedDimension.set(this.coarsedGridDims);
+  this.coarsedInfoBuffer.unmap();
+
+  this.coarsedRangeLayout = this.device.createBindGroupLayout({
+    entries: [
+      {
+        binding: 0,
+        visibility: GPUShaderStage.COMPUTE,
+        buffer: {
+          type: "uniform",
+        },
+      },
+
+      {
+        binding: 1,
+        visibility: GPUShaderStage.COMPUTE,
+        buffer: {
+          type: "uniform",
+        },
+      },
+
+      {
+        binding: 2,
+        visibility: GPUShaderStage.COMPUTE,
+        buffer: {
+          type: "storage",
+        },
+      },
+
+      {
+        binding: 3,
+        visibility: GPUShaderStage.COMPUTE,
+        buffer: {
+          type: "storage",
+        },
+      },
+
+      {
+        binding: 4,
+        visibility: GPUShaderStage.COMPUTE,
+        texture: {
+          storageTexture: { access: "write-only", format: "rgba8unorm" },
+        },
+      },
+    ],
+  });
+
+  const coarsedRangePipeline = this.device.createComputePipeline({
+    layout: this.device.createPipelineLayout({
+      bindGroupLayouts: [this.coarsedRangeLayout],
+    }),
+    compute: {
+      module: this.device.createShaderModule({
+        code: compute_coarsed_block_ranges_comp_spv,
+      }),
+      entryPoint: "main",
+    },
+  });
+
+  // console.log(this.renderTarget.createView());
+  this.coarsedRangeBindGroup = this.device.createBindGroup({
+    layout: this.coarsedRangeLayout,
+    entries: [
+      {
+        binding: 0,
+        resource: { buffer: this.volumeInfoBuffer },
+      },
+      {
+        binding: 1,
+        resource: { buffer: this.coarsedInfoBuffer },
+      },
+
+      {
+        binding: 2,
+        resource: { buffer: this.blockRangesBuffer },
+      },
+
+      {
+        binding: 3,
+        resource: { buffer: this.coarsedRangeBuffer },
+      },
+
+      { binding: 4, resource: this.renderTarget.createView() },
+    ],
+  });
+
+  // just to make sure that it can support when coarsed grid count is more than maximum workgroupcount
+  let workGroup_Size = 32;
+  this.numWorkGroupsCoarsed = Math.ceil(
+    this.totalCoarsedBlock / workGroup_Size
+  );
+  // THIS IS JUST TO CALCUALTE AND MANAGE OFFSET FOR CHUNKING THE WORKGROUP (COARSED GRID COMPUTATION) ON DISPATCH
+  var pushConstants = buildPushConstantsBuffer(
+    this.device,
+    this.numWorkGroupsCoarsed
+  );
+
+  // i dont know how has offset parameter is handled by getBindGroupLayout so i am using the layout used previously;
+  // will check and remove this !!!!
+  var blockIDOffsetBG = this.device.createBindGroup({
+    layout: this.computeBlockRangeS1B0DynamicBGLayout,
+    entries: [
+      { binding: 0, resource: { buffer: pushConstants.gpuBuffer, size: 4 } },
+    ],
+  });
+
+  let commandEncoder = this.device.createCommandEncoder();
+  let pass = commandEncoder.beginComputePass();
+  pass.setPipeline(this.coarsedRangePipeline);
+  pass.setBindGroup(0, this.coarsedRangeBindGroup);
+  for (let i = 0; i < pushConstants.nOffsets; ++i) {
+    pass.setBindGroup(1, blockIDOffsetBG, pushConstants.dynamicOffsets, i, 1);
+    pass.dispatch(pushConstants.dispatchSizes[i], 1, 1);
+  }
+
+  pass.end();
+  await this.device.queue.submit([commandEncoder.finish()]);
+
+  const copyEncoder = this.device.createCommandEncoder();
+  const gpuReadBuffer = this.device.createBuffer({
+    size: this.totalBlocks * 10 * 4,
+    usage: GPUBufferUsage.COPY_DST | GPUBufferUsage.MAP_READ,
+  });
+
+  copyEncoder.copyBufferToBuffer(
+    this.blockRangesBuffer /* source buffer */,
+    0 /* source offset */,
+    gpuReadBuffer /* destination buffer */,
+    0 /* destination offset */,
+    this.totalBlocks * 10 * 4 /* size */
+  );
+
+  await gpuReadBuffer.mapAsync(GPUMapMode.READ);
+  const copyArrayBuffer = gpuReadBuffer.getMappedRange();
+  console.log(new Float32Array(copyArrayBuffer));
+
+  // Submit copy commands.
+  const copyCommands = copyEncoder.finish();
+  await this.device.queue.submit([copyCommands]);
+};
 // Step the active rays forward in the macrocell grid, updating block_id and t.
 // Rays that exit the volume will have block_id = UINT_MAX and t = FLT_MAX
 VolumeRaycaster.prototype.macroTraverse = async function () {
@@ -1309,6 +1620,16 @@ VolumeRaycaster.prototype.sortActiveRaysByBlock = async function (
   pass.end();
 
   // We scan the rayActiveCompactOffsetBuffer, so copy the ray active information over
+  // ray active buffer is outcome of the pipeline above which populate
+  // either 0- or 1 based on the value of ray information (contributing or not; active or not)
+
+  //here we are not removing any ray so we have all rays so size is width*height*4
+
+  /*
+  rayActiveBuffer is just this
+  rays[ray_index].block_id != UINT_MAX ? 1 : 0
+  */
+
   commandEncoder.copyBufferToBuffer(
     this.rayActiveBuffer,
     0,
@@ -1318,8 +1639,13 @@ VolumeRaycaster.prototype.sortActiveRaysByBlock = async function (
   );
 
   // We also scan the active block buffer to produce offsets for compacting active block IDs
-  // down This will let us reduce the dispatch size of the ray tracing step to just active
-  // blocks
+  // down
+
+  //This will let us reduce the dispatch size of the ray tracing step to just active blocks
+
+  //blockVisibleBuffer is just a buffer loaded with value of 1 or 0 based on factor if the active ray found the iso-value there
+  // and it is default 0 and examination and value population is done in mark_block_active shader which is in markBlockActivePipeline
+
   commandEncoder.copyBufferToBuffer(
     this.blockVisibleBuffer,
     0,
@@ -1327,22 +1653,40 @@ VolumeRaycaster.prototype.sortActiveRaysByBlock = async function (
     0,
     this.totalBlocks * 4
   );
+
   this.device.queue.submit([commandEncoder.finish()]);
 
   // Scan the active ray buffer and compact the active ray IDs before we sort
   // so that the sort doesn't have to process such a large number of items
   // TODO: This is not matching numRaysActive?
+
+  //scanRayActive is scanner with activeRayBuffer data attached to scan
   var nactive = await this.scanRayActive.scan(
     this.canvas.width * this.canvas.height
-  );
+  ); // total number of active rays
+
   // Should match numRaysActive, sanity check here
+
+  //we got nActive from scan of rays count and numRaysActive is from scan of ray count in each block
+  // so that need to be equal
+
   if (numRaysActive != nactive) {
     console.log(
       `nactive ${nactive} doesn't match numRaysActive ${numRaysActive}!?`
     );
   }
   var startCompacts = performance.now();
+
   // Compact the active ray IDs and their block IDs down
+
+  //this will just compacting down the rayActiveBuffer by ignoring not active ray and filling that data
+  // into rayActiveCompactOffsetBuffer; in other word nothing but clearing unwanted things
+
+  /*
+   if (rayActiveBuffer[i] != 0) {
+    rayIDBuffer[rayActiveCompactOffsetBuffer[i]] = gl_GlobalInvocationID.x + compact_offset;
+  }
+  */
   await this.streamCompact.compactActiveIDs(
     this.canvas.width * this.canvas.height,
     this.rayActiveBuffer,
@@ -1350,24 +1694,36 @@ VolumeRaycaster.prototype.sortActiveRaysByBlock = async function (
     this.rayIDBuffer
   );
 
+  /*
+  this.rayBlockIDBuffer is this buffer made in write_ray_and_block_id.comp by this computation
+              block_id[ray_index] = rays[ray_index].block_id;
+ */
+
   await this.streamCompact.compactActive(
     this.canvas.width * this.canvas.height,
     this.rayActiveBuffer,
     this.rayActiveCompactOffsetBuffer,
     this.rayBlockIDBuffer,
-    this.compactRayBlockIDBuffer
+    this.compactRayBlockIDBuffer //output
   );
+
+  // compactActiveIDs is active rays array with index of array  where as compactActive is active rays array with
+  //the block id of that rays so both array make combined compaction where we have both rays instance saver and blockid
+  // saver arrays
 
   // Compact the active block IDs down as well
   var numActiveBlocks = await this.scanBlockActiveOffsets.scan(
     this.totalBlocks
   );
+
+  // this is to compact the block with value of block_id of that ray in that index
   await this.streamCompact.compactActiveIDs(
     this.totalBlocks,
     this.blockVisibleBuffer,
     this.blockActiveCompactOffsetBuffer,
     this.activeBlockIDBuffer
   );
+
   var endCompacts = performance.now();
   console.log(
     `sortActiveRaysByBlock: Compacts ${endCompacts - startCompacts}ms`
@@ -1482,6 +1838,7 @@ VolumeRaycaster.prototype.raytraceVisibleBlocks = async function (
   // First make the combined block information buffer (to fit in 6 storage buffers)
   // The limit will be bumped up to 8 so we could remove this piece in a bit once
   // the change lands in Chromium
+
   pass.setPipeline(this.combineBlockInformationPipeline);
   pass.setBindGroup(0, this.combineBlockInformationBG);
   pass.dispatch(numActiveBlocks, 1, 1);
