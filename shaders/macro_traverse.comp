@@ -36,25 +36,6 @@ vec4 block_id_to_color(const uvec3 block_id) {
     const vec3 n_blocks = padded_dims.xyz / uvec3(4);
     return vec4(vec3(block_id) / n_blocks, 1.0);
 }
-
-vec2 findCoarsedRange(const uvec3 pos) {
-    const uvec3 n_blocks = padded_dims.xyz / uvec3(4);
-    vec2 coarsed_range = vec2(FLT_MAX, -65536);
-    for (int i = 0; i < 4; i++) {
-        for (int j = 0; j < 4; j++) {
-            for (int k = 0; k < 4; k++) {
-                uvec3 child_block_pos = 4 * pos + uvec3(i, j, k); //check for the boundary condition
-                if (!any(greaterThanEqual(child_block_pos, n_blocks))) {
-                    uint child_block_id = child_block_pos.x + n_blocks.x * (child_block_pos.y + n_blocks.y * child_block_pos.z);
-                    coarsed_range.x = min(coarsed_range.x, block_ranges[child_block_id].range.x);
-                    coarsed_range.y = max(coarsed_range.y, block_ranges[child_block_id].range.y);
-                }
-            }
-        }
-    }
-    return coarsed_range;
-}
-
 void main() {
     uint ray_index = gl_GlobalInvocationID.x + gl_GlobalInvocationID.y * image_width;
 
