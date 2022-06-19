@@ -26,7 +26,11 @@ layout(set = 0, binding = 3, std430) buffer RayInformation {
     RayInfo rays[];
 };
 
-uniform layout(set = 0, binding = 4, rgba8) writeonly image2D render_target;
+layout(set = 0, binding = 4, std430) buffer CoarsedRanges {
+    CoarsedBlockRange coarse_ranges[];
+};
+
+uniform layout(set = 0, binding = 5, rgba8) writeonly image2D render_target;
 
 vec4 block_id_to_color(const uvec3 block_id) {
     const vec3 n_blocks = padded_dims.xyz / uvec3(4);
@@ -57,11 +61,10 @@ void main() {
     if (rays[ray_index].t == FLT_MAX) {
         return;
     }
-
     const uvec3 n_blocks = padded_dims.xyz / uvec3(4);
     const vec3 macrogrid_dims = vec3(n_blocks);
 
-    const uvec3 n_coarsedGrid = uvec3(ceil(padded_dims.x / 16), ceil(padded_dims.y / 16), ceil(padded_dims.z / 16));
+    const ivec3 n_coarsedGrid = ivec3(ceil(padded_dims.x / 16), ceil(padded_dims.y / 16), ceil(padded_dims.z / 16));
     const vec3 coarsedgrid_dims = vec3(n_coarsedGrid);
     // Transform the ray into the dual grid space
     vec3 volume_translation = vec3(0) - volume_scale.xyz * 0.5;
@@ -113,11 +116,12 @@ void main() {
     //while not out of the grid
     while (!outside_grid(cell1, coarsedgrid_dims)) {
         const ivec3 coarsedgrid_pos = ivec3(cell1);
+        int coarsedgridIndex = coarsedgrid_pos.x + n_coarsedGrid.y*coarsedgrid_pos.y + n_coarsedGrid.x*n_coarsedGrid.y*coarsedgrid_pos.z;
         float t_next = min(t_max.x, min(t_max.y, t_max.z));
         if (t_next < t_current) {
             break;
         }
-        vec2 coarsed_grid_range = findCoarsedRange(coarsedgrid_pos);
+        vec2 coarsed_grid_range = coarse_ranges[coarsedgridIndex].range;
         if (isovalue >= coarsed_grid_range.x && isovalue <= coarsed_grid_range.y) {
             ivec3 localBoundary = ivec3(coarsedgrid_pos) * 4 + ivec3(4, 4, 4);
             p = (vol_eye + t_current * grid_ray_dir);

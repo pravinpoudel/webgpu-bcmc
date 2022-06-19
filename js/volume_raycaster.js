@@ -338,8 +338,15 @@ var VolumeRaycaster = function (device, canvas) {
         },
       },
       {
-        // Also pass the render target for debugging
         binding: 4,
+        visibility: GPUShaderStage.COMPUTE,
+        buffer: {
+          type: "storage",
+        },
+      },
+      {
+        // Also pass the render target for debugging
+        binding: 5,
         visibility: GPUShaderStage.COMPUTE,
         storageTexture: { access: "write-only", format: renderTargetFormat },
       },
@@ -933,7 +940,13 @@ VolumeRaycaster.prototype.setCompressedVolume = async function (
           buffer: this.rayInformationBuffer,
         },
       },
-      { binding: 4, resource: this.renderTarget.createView() },
+      {
+        binding: 4,
+        resource: {
+          buffer: this.coarsedRangeBuffer,
+        },
+      },
+      { binding: 5, resource: this.renderTarget.createView() },
     ],
   });
 
@@ -1125,7 +1138,7 @@ VolumeRaycaster.prototype.computeCoarsedRange = async function () {
     mappedAtCreation: true,
   });
 
-  let coarsedDimension = new Float32Array(
+  let coarsedDimension = new Uint32Array(
     this.coarsedInfoBuffer.getMappedRange()
   );
 
@@ -1268,6 +1281,7 @@ VolumeRaycaster.prototype.computeCoarsedRange = async function () {
     0 /* destination offset */,
     this.totalCoarsedBlock * 2 * 4 /* size in byte */
   );
+
   this.device.queue.submit([commandEncoder.finish()]);
   await this.device.queue.onSubmittedWorkDone();
   await gpuReadBufferCR.mapAsync(GPUMapMode.READ);

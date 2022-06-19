@@ -22,7 +22,7 @@ struct BlockRange {
 };
 
 struct CoarsedBlockRange{
-    uvec2 range;
+    vec2 range;
 };
 
 struct BlockInfo {
