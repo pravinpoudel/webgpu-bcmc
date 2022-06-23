@@ -97,25 +97,38 @@ void main() {
     //while not out of the grid
     while (!outside_grid(cell1, coarsedgrid_dims)) {
         const ivec3 coarsedgrid_pos = ivec3(cell1);
-        int coarsedgridIndex = coarsedgrid_pos.x + n_coarsedGrid.y*coarsedgrid_pos.y + n_coarsedGrid.x*n_coarsedGrid.y*coarsedgrid_pos.z;
+        int coarsedgridIndex = coarsedgrid_pos.x + n_coarsedGrid.x* (coarsedgrid_pos.y + n_coarsedGrid.y*coarsedgrid_pos.z);
+        vec3 proportion = vec3((coarsedgridIndex*1.0))/n_coarsedGrid;
+        
         float t_next = min(t_max.x, min(t_max.y, t_max.z));
         if (t_next < t_current) {
             break;
         }
-
         vec2 coarsed_grid_range = coarse_ranges[coarsedgridIndex].range;
+      
         if (isovalue >= coarsed_grid_range.x && isovalue <= coarsed_grid_range.y) {
+
             ivec3 localBoundary = ivec3(coarsedgrid_pos) * 4 + ivec3(4, 4, 4);
+            //find partial here and add partial here
+            bvec3 partial = greaterThan(localBoundary, n_blocks.xyz);
+        	ivec3 local_block_count = ivec3(partial.x ? (n_blocks.x - 4*n_coarsedGrid.x) : 4,
+            partial.y ? (n_blocks.y - 4*n_coarsedGrid.y) : 4,
+            partial.z ? (n_blocks.z - 4*n_coarsedGrid.z) : 4);
+            ivec3 localBoundary2 = ivec3(coarsedgrid_pos)*4 + local_block_count;
+            
+            
+            
             p = (vol_eye + t_current * grid_ray_dir);
             p = clamp(p, vec3(0), vec3(macrogrid_dims - 1));
             cell = floor(p);
-            //find t for fine grid
-            while (!outside_grid(cell, localBoundary)) {
+            // find t for fine grid
+            while (!outside_grid(cell, localBoundary2)) {
                 const ivec3 block_pos = ivec3(cell);
                 t_next = min(t_max.x, min(t_max.y, t_max.z));
                 if (t_next < t_current) {
                     break;
                 }
+                // imageStore(render_target, ivec2(gl_GlobalInvocationID.xy), vec4(1.0, 0.0, 0.0, 0.3));
                 uint block_id = block_pos.x + n_blocks.x * (block_pos.y + n_blocks.y * block_pos.z);
                 vec2 cell_range = block_ranges[block_id].range;
                 for (int k = 0; k < 2; ++k) {
