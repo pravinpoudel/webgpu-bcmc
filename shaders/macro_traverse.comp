@@ -98,7 +98,6 @@ void main() {
     while (!outside_grid(cell1, coarsedgrid_dims)) {
         const ivec3 coarsedgrid_pos = ivec3(cell1);
         int coarsedgridIndex = coarsedgrid_pos.x + n_coarsedGrid.x* (coarsedgrid_pos.y + n_coarsedGrid.y*coarsedgrid_pos.z);
-        vec3 proportion = vec3((coarsedgridIndex*1.0))/n_coarsedGrid;
         
         float t_next = min(t_max.x, min(t_max.y, t_max.z));
         if (t_next < t_current) {
