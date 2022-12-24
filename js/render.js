@@ -15,7 +15,7 @@
   var canvas = document.getElementById("webgpu-canvas");
   var context = canvas.getContext("webgpu");
 
-  var dataset = datasets.foot;
+  var dataset = datasets.fuel;
   if (window.location.hash) {
     var name = decodeURI(window.location.hash.substr(1));
     console.log(`Linked to data set ${name}`);

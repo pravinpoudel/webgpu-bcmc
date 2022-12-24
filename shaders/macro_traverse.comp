@@ -98,7 +98,6 @@ void main() {
     while (!outside_grid(cell1, coarsedgrid_dims)) {
         const ivec3 coarsedgrid_pos = ivec3(cell1);
         int coarsedgridIndex = coarsedgrid_pos.x + n_coarsedGrid.x* (coarsedgrid_pos.y + n_coarsedGrid.y*coarsedgrid_pos.z);
-        
         float t_next = min(t_max.x, min(t_max.y, t_max.z));
         if (t_next < t_current) {
             break;
@@ -169,6 +168,7 @@ void main() {
             vec3 current_p1 = (vol_eye1 + t_current * grid_ray_dir1);
             current_p1 = clamp(current_p1, vec3(0), vec3(coarsedgrid_dims - 1));
             cell1 = floor(current_p1);
+            // float t_next1 =  min(t_max.x, min(t_max.y, t_max.z));
         }
         else {
             t_current = t_next;
